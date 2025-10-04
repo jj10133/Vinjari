@@ -2,12 +2,6 @@ name: App
 include:
   - app/addons/addons.yml
 
-packages:
-  BareKit:
-    url: https://github.com/holepunchto/bare-kit-swift
-    branch: main
-
-
 targets:
   App:
     type: application
@@ -18,6 +12,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: to.holepunch.bare.ios
         SWIFT_VERSION: 5.0
         CODE_SIGN_STYLE: Automatic
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/app/briding-header.h"
     info:
       path: app/Info.plist
 
@@ -34,9 +29,8 @@ targets:
 
       - path: app/Core/Scheme.swift
         group: app/Core
-
-      - path: app/Core/Home/HomeView.swift
-        group: app/Core/Home
+      - path: app/Core/Worker.swift
+      - path: app/Core/IPCViewModel.swift
 
       - path: app/Core/Root/ContentView.swift
         group: app/Core/Root
