@@ -33,34 +33,66 @@ struct HyperResourceSchemeHandler: URLSchemeHandler {
                     
                     try await ipc.write(data: requestURLString.data(using: .utf8)!)
                     
-                    let mimeType = "text/html"
-                    let statusCode = 200
-                    
-                    if let httpResponse = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: ["Content-Type": mimeType]) {
-                        continuation.yield(URLSchemeTaskResult.response(httpResponse))
-                    } else {
-                        continuation.finish(throwing: URLError(.unsupportedURL))
-                        return
-                    }
+                    var receivedResponse = false
+                    var responseMimeType = "application/octet-stream"
+                    var contentLength = ""
                     
                     for try await dataChunck in ipc {
-                        if let dataString = String(data: dataChunck, encoding: .utf8),
-                               let range = dataString.range(of: "END_OF_RESOURCE") {
-                                
-                                // 2. Yield the data *before* the marker
-                                let actualData = dataString[..<range.lowerBound].data(using: .utf8)!
-                                if !actualData.isEmpty {
-                                    continuation.yield(.data(actualData))
-                                }
-                                
-                                // 3. Finish the stream when the marker is found
-                                continuation.finish()
-                                print("HyperResourceSchemeHandler: Detected EOF, Finished streaming.")
-                                return // Exit the Task
+                        let dataString = String(data: dataChunck, encoding: .utf8) ?? ""
+                        
+                        // 2. Protocol Check: Look for the MIMETYPE header (sent first by Node.js)
+                        if !receivedResponse, dataString.hasPrefix("MIMETYPE:") {
+                            responseMimeType = String(dataString.dropFirst("MIMETYPE:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                            print("receive the correct mime type \(responseMimeType)")
+                            
+                            
+                            contentLength = String(dataString.dropFirst("CONTENTLENGTH:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                          
+                            // 3. Send the HTTP response with the correct MIME type
+                            if let httpResponse = HTTPURLResponse(
+                                url: url,
+                                statusCode: 200,
+                                httpVersion: nil,
+                                headerFields: ["Content-Type": responseMimeType, "Content-Length": contentLength]
+                            ) {
+                                continuation.yield(URLSchemeTaskResult.response(httpResponse))
+                                receivedResponse = true
+                                continue
                             } else {
-                                // 4. Yield the chunk if the marker isn't found
-                                continuation.yield(.data(dataChunck))
+                                continuation.finish(throwing: URLError(.unsupportedURL))
+                                return
                             }
+                        }
+                        
+                        // 4. Check for End-Of-Resource marker
+                        if let range = dataString.range(of: "END_OF_RESOURCE") {
+                            // Yield data before the EOF marker
+                            let actualData = dataString[..<range.lowerBound].data(using: .utf8) ?? Data()
+                            if !actualData.isEmpty {
+                                continuation.yield(.data(actualData))
+                            }
+                            
+                            continuation.finish()
+                            print("HyperResourceSchemeHandler: Detected EOF, Finished streaming for \(url).")
+                            return
+                        }
+                        
+                        // 5. Check for Error marker
+                        if dataString.hasPrefix("ERROR:") {
+                            print("HyperResourceSchemeHandler: Backend error - \(dataString)")
+                            continuation.finish(throwing: URLError(.resourceUnavailable))
+                            return
+                        }
+                        
+                        // 6. Yield the data chunk if a response has been sent
+                        if receivedResponse {
+                            continuation.yield(.data(dataChunck))
+                        } else {
+                            // Protocol error: Received data before MIMETYPE header
+                            print("HyperResourceSchemeHandler: Protocol error: Data received before MIME type response.")
+                            continuation.finish(throwing: URLError(.cannotDecodeContentData))
+                            return
+                        }
                     }
                     
                     continuation.finish()
