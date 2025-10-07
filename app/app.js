@@ -102,6 +102,8 @@ function getMimeType(filePath) {
     if (filePath.endsWith('.js')) return 'application/javascript';
     if (filePath.endsWith('.mov')) return 'video/quicktime';
     if (filePath.endsWith('.mp4')) return 'video/mp4';
+    if (filePath.endsWith('.png')) return 'image/png';
+
     return 'application/octet-stream';
 }
 
