@@ -20,7 +20,8 @@ struct HyperResourceSchemeHandler: URLSchemeHandler {
             Task {
                 do {
                     guard let ipc = self.ipc else {
-                        print("Error: IPC object is nil, cannot read.")
+                        print("IPC is nil")
+                        continuation.finish(throwing: URLError(.cannotConnectToHost))
                         return
                     }
                     
@@ -29,42 +30,49 @@ struct HyperResourceSchemeHandler: URLSchemeHandler {
                         return
                     }
                     
-                    let requestURLString = url.absoluteString
                     
-                    try await ipc.write(data: requestURLString.data(using: .utf8)!)
+                    // Prepare full HTTP-like request to send over IPC
+                    let headers = request.allHTTPHeaderFields ?? [:]
+                    let method = request.httpMethod ?? "GET"
                     
-                    var receivedResponse = false
-                    var responseMimeType = "application/octet-stream"
-                    var contentLength = ""
+                    let payload: [String: Any] = [
+                        "url": url.absoluteString,
+                        "method": method,
+                        "headers": headers
+                    ]
                     
-                    for try await dataChunck in ipc {
-                        let dataString = String(data: dataChunck, encoding: .utf8) ?? ""
+                    let jsonData = try JSONSerialization.data(withJSONObject: payload)
+                    try await ipc.write(data: jsonData)
+                    
+                    var responseReceived = false
+                    
+                    for try await dataChunk in ipc {
+                        let dataString = String(data: dataChunk, encoding: .utf8) ?? ""
                         
-                        // 2. Protocol Check: Look for the MIMETYPE header (sent first by Node.js)
-                        if !receivedResponse, dataString.hasPrefix("MIMETYPE:") {
-                            responseMimeType = String(dataString.dropFirst("MIMETYPE:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                            print("receive the correct mime type \(responseMimeType)")
-                            
-                            
-                            contentLength = String(dataString.dropFirst("CONTENTLENGTH:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                          
-                            // 3. Send the HTTP response with the correct MIME type
-                            if let httpResponse = HTTPURLResponse(
-                                url: url,
-                                statusCode: 200,
-                                httpVersion: nil,
-                                headerFields: ["Content-Type": responseMimeType, "Content-Length": contentLength]
-                            ) {
+                        if !responseReceived {
+                            if let json = try? JSONSerialization.jsonObject(with: dataChunk, options: []) as? [String: Any],
+                               let statusCode = json["statusCode"] as? Int,
+                               let headers = json["headers"] as? [String: String] {
+                                
+                                let httpResponse = HTTPURLResponse(
+                                    url: url,
+                                    statusCode: statusCode,
+                                    httpVersion: nil,
+                                    headerFields: headers
+                                )!
+                                
+                                print(httpResponse.allHeaderFields)
+                                
                                 continuation.yield(URLSchemeTaskResult.response(httpResponse))
-                                receivedResponse = true
+                                responseReceived = true
                                 continue
                             } else {
-                                continuation.finish(throwing: URLError(.unsupportedURL))
+                                print("Malformed response metadata")
+                                continuation.finish(throwing: URLError(.badServerResponse))
                                 return
                             }
                         }
                         
-                        // 4. Check for End-Of-Resource marker
                         if let range = dataString.range(of: "END_OF_RESOURCE") {
                             // Yield data before the EOF marker
                             let actualData = dataString[..<range.lowerBound].data(using: .utf8) ?? Data()
@@ -84,24 +92,17 @@ struct HyperResourceSchemeHandler: URLSchemeHandler {
                             return
                         }
                         
-                        // 6. Yield the data chunk if a response has been sent
-                        if receivedResponse {
-                            continuation.yield(.data(dataChunck))
-                        } else {
-                            // Protocol error: Received data before MIMETYPE header
-                            print("HyperResourceSchemeHandler: Protocol error: Data received before MIME type response.")
-                            continuation.finish(throwing: URLError(.cannotDecodeContentData))
-                            return
-                        }
+                        print("📦 Got data chunk:", dataChunk.count)
+                        // Actual binary data
+                        continuation.yield(.data(dataChunk))
                     }
                     
                     continuation.finish()
                 } catch {
-                    print("HyperResourceSchemeHandler: Error during scheme handler for \(request.url?.absoluteString ?? "unknown URL"): \(error.localizedDescription)")
+                    print("HyperResourceSchemeHandler: \(error.localizedDescription)")
                     continuation.finish(throwing: error)
                     ipc?.close()
                 }
-                
             }
         }
     }
