@@ -1,5 +1,9 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let addNewTab = Notification.Name("addNewTab")
+}
+
 @main
 struct App: SwiftUI.App {
     
@@ -9,6 +13,9 @@ struct App: SwiftUI.App {
     
     @Environment(\.scenePhase) private var scenePhase
     
+    init() {
+        NSWindow.allowsAutomaticWindowTabbing = true
+    }
     
     var body: some Scene {
         WindowGroup {
@@ -21,10 +28,20 @@ struct App: SwiftUI.App {
 //                    Task {
 //                        await ipcViewModel.readFromIPC()
 //                    }
+                    let _ = NSApplication.shared.windows.map { $0.tabbingMode = .preferred }
                 }
                 .onDisappear {
                     worker.terminate()
                 }
+        }
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Tab") {
+//                    NotificationCenter.default.post(name: .addNewTab, object: nil)
+                    openNewWindow()
+                }
+                .keyboardShortcut("t", modifiers: .command)
+            }
         }
         .onChange(of: scenePhase) { phase in
             guard isWorkletStarted else { return }
@@ -38,5 +55,9 @@ struct App: SwiftUI.App {
                 break
             }
         }
+    }
+    
+    private func openNewWindow() {
+        NSApp.sendAction(#selector(NSWindow.newWindowForTab(_:)), to: nil, from: nil)
     }
 }
