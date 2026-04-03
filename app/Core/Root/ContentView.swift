@@ -1,39 +1,70 @@
-//
-//  ContentView.swift
-//  App
-//
-//  Created by joker on 2025-05-15.
-//
-
 import SwiftUI
 import WebKit
 
 struct ContentView: View {
-    @State private var page: WebPage?
-    @EnvironmentObject private var ipcViewModel: IPCViewModel
+    @State var browser: BrowserViewModel
     
     var body: some View {
         NavigationStack {
-            if let page = page {
-                WebView(page)
-                    .navigationTitle(page.title)
-                    .onAppear {
-                        if let url = URL(string: "hyper://0143faffb6927994c414ccb46f6b10e0ecc5e4dfe0301207a4b96239897eac4c") {
-                            page.load(URLRequest(url: url))
-                        }
+            webContent
+            // Attach modifiers to the content inside the Stack
+                .searchable(text: $browser.addressBarText, placement: .toolbarPrincipal)
+                .onSubmit(of: .search) {
+                    browser.commitAddress()
                 }
-            } else {
-                ProgressView("Loading...", value: page?.estimatedProgress)
-                    .onAppear {
-                        let scheme = URLScheme("hyper")!
-                        let handler = HyperResourceSchemeHandler(ipc: ipcViewModel.ipc)
+                .toolbar {
+                    // LEFT SIDE: Navigation
+                    ToolbarItemGroup(placement: .navigation) {
+                        Button {
+                            browser.activeTab?.goBack()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        .disabled(!(browser.activeTab?.canGoBack ?? false))
                         
-                        var configuration = WebPage.Configuration()
-                        configuration.urlSchemeHandlers[scheme] = handler
-                        page = WebPage(configuration: configuration)
-                        
+                        Button {
+                            browser.activeTab?.goForward()
+                        } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                        .disabled(!(browser.activeTab?.canGoForward ?? false))
+                    }
+                    
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Button {
+                            toggleShowAllTabs()
+                        } label: {
+                            Image(systemName: "square.on.square")
+                        }
+                    }
+                    
+                }
+        }
+    }
+    
+    private func toggleShowAllTabs() {
+        NSApp.sendAction(#selector(NSWindow.toggleTabOverview(_:)), to: nil, from: nil)
+    }
+    
+    @ViewBuilder
+    private var webContent: some View {
+        if let tab = browser.activeTab {
+            VStack(spacing: 0) {
+                WebView(tab.page)
+                    .ignoresSafeArea()
+                    .onChange(of: tab.page.url) { _, _ in
+                        tab.navigationCounter += 1
+                        browser.syncAddressBar()
+                    }
+                    .onChange(of: tab.page.isLoading) { _, isLoading in
+                        if !isLoading { tab.navigationCounter += 1 }
                     }
             }
+            .id(tab.id)
+            .navigationTitle(tab.page.title.isEmpty ? "New Tab" : tab.page.title)
+        } else {
+            // A non-empty view prevents the "buildExpression" error
+            Color.clear
         }
     }
 }

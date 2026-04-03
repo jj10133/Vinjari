@@ -2,6 +2,14 @@ name: App
 include:
   - app/addons/addons.yml
 
+packages:
+  BareKit:
+    url: https://github.com/holepunchto/bare-kit-swift
+    branch: main
+  BareRPC:
+    url: https://github.com/holepunchto/bare-rpc-swift
+    branch: main
+
 targets:
   App:
     type: application
@@ -12,42 +20,53 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: to.holepunch.bare.ios
         SWIFT_VERSION: 5.0
         CODE_SIGN_STYLE: Automatic
-        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/app/briding-header.h"
     info:
       path: app/Info.plist
 
     dependencies:
-      - framework: app/frameworks/BareKit.framework
+      - framework: app/frameworks/BareKit.xcframework
+      - package: BareKit
+      - package: BareRPC
 
     sources:
       - path: app/App.swift
-      - path: app/app.js
+      - path: app/AppDelegate.swift
       - path: app/app.bundle
-      - path: app/briding-header.h
-      - path: app/IPC.swift
-      - path: app/Worklet.swift
+        optional: true
 
-      - path: app/Core/Scheme.swift
+      - path: app/js/app.js
+        group: app/js
+
+      - path: app/Core/HyperSchemeHandler.swift
         group: app/Core
-      - path: app/Core/Worker.swift
-      - path: app/Core/IPCViewModel.swift
+      - path: app/Core/BareRuntime.swift
+      - path: app/Core/RPCClient.swift
+      - path: app/Core/DriveService.swift
+      - path: app/Core/BrowserViewModel.swift
+      - path: app/Core/BrowserTab.swift
+      - path: app/Core/HyperNavigationDecider.swift
+      - path: app/Core/AppModel.swift
 
       - path: app/Core/Root/ContentView.swift
         group: app/Core/Root
         optional: true
     scheme:
       preActions:
-        - name: Link
+        - name: Link & pack
           script: |
+
             PATH="${PATH}" "${PWD}/node_modules/.bin/bare-link" \
-              --preset darwin \
-              --out ${PWD}/app/addons \
+              --host darwin-arm64 \
+              --host ios-arm64 \
+              --host ios-arm64-simulator \
+              --out ${PWD}/app/addons/ \
               ${PWD}
-        - name: Pack
-          script: |
+
             PATH="${PATH}" "${PWD}/node_modules/.bin/bare-pack" \
-              --preset darwin \
+              --host darwin-arm64 \
+              --host ios-arm64 \
+              --host ios-arm64-simulator \
               --linked \
               --base ${PWD} \
               --out ${PWD}/app/app.bundle \
-            ${PWD}/app/app.js
+              ${PWD}/app/js/app.js
