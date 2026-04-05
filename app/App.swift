@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct App: SwiftUI.App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
 
     private var appModel = AppModel.shared
     
@@ -20,7 +21,20 @@ struct App: SwiftUI.App {
             }
             .task { await appModel.boot() }
             .background(WindowConfigurator())
+            .onDisappear {
+                appModel.runtime.terminate()
+            }
         }
+        .onChange(of: scenePhase, { oldValue, newValue in
+            switch newValue {
+            case .background:
+                appModel.runtime.suspend()
+            case .active:
+                appModel.runtime.resume()
+            default:
+                break
+            }
+        })
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Tab") {
