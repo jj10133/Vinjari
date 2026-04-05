@@ -11,3 +11,4 @@ targets:
       - framework: bare-url.2.3.2.framework
       - framework: rocksdb-native.3.13.0.framework
       - framework: bare-buffer.3.4.4.framework
+      - framework: rabin-native.2.0.0.framework

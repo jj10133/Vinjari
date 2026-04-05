@@ -1,23 +1,12 @@
-//
-//  ContentView.swift
-//  App
-//
-//  Created by joker on 2025-05-15.
-//
-
 import SwiftUI
 import WebKit
 
 struct ContentView: View {
     @EnvironmentObject private var ipcViewModel: IPCViewModel
-    
-    @State private var page: WebPage
+    @State private var page: WebPage = WebPage()
     @State private var addressBarText: String = ""
     
     
-    init() {
-        _page = State(initialValue: WebPage())
-    }
     var body: some View {
         NavigationStack {
             VStack {
@@ -42,10 +31,11 @@ struct ContentView: View {
                         .help("Back")
                         
                         Button {
+                            addNewTab()
                         } label: {
                             Image(systemName: "chevron.right")
                         }
-                        .disabled(true)
+//                        .disabled(true)
                         .help("Forward")
                     }
                     
@@ -69,6 +59,23 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - Native AppKit Actions
+    
+    private func addNewTab() {
+        NSApp.sendAction(#selector(NSWindow.newWindowForTab(_:)), to: nil, from: nil)
+    }
+    
+    private func toggleTabOverview() {
+        // Triggers the native macOS Tab Grid/Exposé view
+        NSApp.sendAction(#selector(NSWindow.toggleTabOverview(_:)), to: nil, from: nil)
+    }
+    
+    private func toggleSidebar() {
+        NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+    }
+    
+    // MARK: - Logic
+    
     private func configureScheme() {
         let scheme = URLScheme("hyper")!
         let handler = HyperResourceSchemeHandler(ipc: ipcViewModel.ipc)
@@ -77,9 +84,7 @@ struct ContentView: View {
         configuration.urlSchemeHandlers[scheme] = handler
         configuration.allowsAirPlayForMediaPlayback = true
         page = WebPage(configuration: configuration)
-        
     }
-    
     
     private func load() {
         guard !addressBarText.isEmpty else { return }

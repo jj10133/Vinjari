@@ -24,10 +24,10 @@
   },
   "dependencies": {
     "b4a": "^1.6.7",
-    "corestore": "^7.4.5",
-    "hyperdrive": "^13.0.1",
-    "hyperswarm": "^4.14.0",
-    "localdrive": "^2.2.0",
-    "mirror-drive": "^1.6.0"
+    "corestore": "^7.9.0",
+    "hyperdrive": "^13.3.0",
+    "hyperswarm": "^4.17.0",
+    "localdrive": "^2.2.1",
+    "mirror-drive": "^1.13.0"
   }
 }

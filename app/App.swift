@@ -37,7 +37,6 @@ struct App: SwiftUI.App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Tab") {
-//                    NotificationCenter.default.post(name: .addNewTab, object: nil)
                     openNewWindow()
                 }
                 .keyboardShortcut("t", modifiers: .command)

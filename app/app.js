@@ -4,7 +4,7 @@ const Hyperdrive = require('hyperdrive');
 const b4a = require('b4a');
 const Corestore = require('corestore');
 
-const store = new Corestore("/tmp/landmark");
+const store = new Corestore("/tmp/landmark-data");
 const swarm = new Hyperswarm();
 
 
@@ -111,6 +111,7 @@ function getMimeType(filePath) {
 async function lookUp(driveKey) {
     
     let found = false;
+
     for await (const dkey of store.list()) {
         console.log(dkey.toString('hex'))
         if (dkey.toString('hex') === driveKey) {
@@ -118,20 +119,24 @@ async function lookUp(driveKey) {
             break;
         }
     }
-    
+
+    // ALWAYS create the drive
+    drive = new Hyperdrive(store, driveKey);
+    await drive.ready();
+
     if (!found) {
-        drive = new Hyperdrive(store, driveKey);
-        await drive.ready();
-        
         console.log("🔍 Drive not found in store, joining swarm...");
+
         swarm.join(drive.discoveryKey);
+
         swarm.on("connection", (conn) => {
             console.log("🔗 Peer connected via Hyperswarm");
             store.replicate(conn);
         });
+
         await swarm.flush();
     } else {
-        console.log("✅ Drive found in store. Skipping swarm join.");
+        console.log("✅ Drive found in store. Using local copy.");
     }
 }
 
