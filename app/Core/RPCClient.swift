@@ -1,23 +1,19 @@
 // RPCClient.swift
 // bare-rpc-swift over BareKit IPC.
 //
-// Wire protocol (confirmed from PeerDrop):
-//   RPC(delegate:)                              — init
-//   rpc.request(UInt, data: Data) async throws -> Data?   — one reply
-//   rpc.receive(Data)                           — feed inbound IPC bytes
-//   delegate.rpc(_:send:)                       — transmit encoded frame
+// Thread safety:
+// bare-rpc's RPC class is NOT thread-safe — its pending [UInt: Continuation]
+// dict is mutated by both request() and receive(). When multiple assets load
+// concurrently (fonts, CSS, JS), these race and corrupt the dictionary.
 //
-// fetch wire format (JS → Swift, success):
-//   [4 bytes big-endian UInt32: header JSON length][header JSON][binary body]
-//
-// error wire format (JS → Swift, any command):
-//   { "error": "<message>" }   — plain JSON, checked before length-prefix decode
+// Fix: @MainActor on RPCClient and IPCBridge ensures all calls to
+// rpc.request() and rpc.receive() run on the same serial executor.
 
 import Foundation
 import BareKit
 import BareRPC
 
-// ─── Command IDs — shared with app.js ────────────────────────────────────────
+// MARK: - Command IDs
 
 enum Command {
     static let fetch  : UInt = 0
@@ -26,10 +22,10 @@ enum Command {
     static let info   : UInt = 3
 }
 
-// ─── Domain types ─────────────────────────────────────────────────────────────
+// MARK: - Domain types
 
 struct DriveEntry: Decodable, Identifiable {
-    var id: String { path }
+    var id         : String { path }
     let name       : String
     let path       : String
     let isDirectory: Bool
@@ -52,9 +48,14 @@ struct FetchMeta: Decodable {
 struct FetchResult {
     let meta: FetchMeta
     let body: Data
+
+    var remoteError: String? {
+        struct E: Decodable { let error: String }
+        return try? JSONDecoder().decode(E.self, from: body).error
+    }
 }
 
-// ─── Errors ───────────────────────────────────────────────────────────────────
+// MARK: - Errors
 
 enum RPCError: LocalizedError {
     case noResponse
@@ -70,53 +71,66 @@ enum RPCError: LocalizedError {
     }
 }
 
-// ─── IPC → RPC bridge ────────────────────────────────────────────────────────
+// MARK: - IPC Bridge
 
+@MainActor
 private final class IPCBridge: RPCDelegate {
 
     private let ipc: IPC
-    unowned var rpc: RPC!
+    weak var rpc: RPC?
 
     init(ipc: IPC) { self.ipc = ipc }
 
-    func rpc(_ rpc: RPC, send data: Data) {
-        Task { try? await ipc.write(data: data) }
+    // nonisolated — RPCDelegate is called by bare-rpc internally.
+    // Hops to MainActor before writing so concurrent sends are serialised.
+    // BareIPC.write is not thread-safe — concurrent calls corrupt its buffer.
+    nonisolated func rpc(_ rpc: RPC, send data: Data) {
+        Task { @MainActor in
+            try? await self.ipc.write(data: data)
+        }
     }
 
     func readLoop() async {
         do {
-            for try await chunk in ipc { rpc.receive(chunk) }
+            for try await chunk in ipc {
+                // Hop to MainActor before receive() so it never
+                // races with request() which also runs on MainActor
+                await MainActor.run { [weak self] in
+                    self?.rpc?.receive(chunk)
+                }
+            }
         } catch {
-            print("[RPCClient] IPC read error: \(error)")
+            print("[RPCClient] IPC read loop ended: \(error)")
         }
     }
 }
 
-// ─── RPCClient ────────────────────────────────────────────────────────────────
+// MARK: - RPCClient
 
+@MainActor
 final class RPCClient {
 
-    private let rpc   : RPC
-    private let bridge: IPCBridge
+    private let rpc     : RPC
+    private let bridge  : IPCBridge
+    private let readTask: Task<Void, Never>
 
     init(ipc: IPC) {
         let bridge = IPCBridge(ipc: ipc)
         let rpc    = RPC(delegate: bridge)
         bridge.rpc = rpc
-        self.rpc    = rpc
-        self.bridge = bridge
-        Task { await bridge.readLoop() }
+        self.rpc      = rpc
+        self.bridge   = bridge
+        self.readTask = Task { await bridge.readLoop() }
     }
 
-    // MARK: - fetch
+    deinit { readTask.cancel() }
+
+    // MARK: - Commands
 
     func fetch(key: String, path: String, headers: [String: String] = [:]) async throws -> FetchResult {
         let payload = try encode(["key": key, "path": path, "headers": headers])
-        let reply   = try await request(Command.fetch, payload: payload)
-        return try decodeFetch(reply)
+        return try decodeFetch(try await request(Command.fetch, payload: payload))
     }
-
-    // MARK: - readdir
 
     func readdir(key: String, path: String = "/") async throws -> [DriveEntry] {
         let payload = try encode(["key": key, "path": path])
@@ -126,15 +140,10 @@ final class RPCClient {
         return try JSONDecoder().decode(R.self, from: reply).entries
     }
 
-    // MARK: - write
-
     func write(key: String, path: String, data fileData: Data) async throws {
         let payload = try encode(["key": key, "path": path, "data": fileData.base64EncodedString()])
-        let reply   = try await request(Command.write, payload: payload)
-        try checkError(reply)
+        try checkError(try await request(Command.write, payload: payload))
     }
-
-    // MARK: - driveInfo
 
     func driveInfo(key: String) async throws -> DriveInfo {
         let payload = try encode(["key": key])
@@ -143,59 +152,42 @@ final class RPCClient {
         return try JSONDecoder().decode(DriveInfo.self, from: reply)
     }
 
-    // MARK: - Helpers
+    // MARK: - Core request
+    // Runs on @MainActor — sequential, never concurrent with receive()
 
     private func request(_ cmd: UInt, payload: Data) async throws -> Data {
-        let data = try await rpc.request(cmd, data: payload)
-        // nil means channel closed without data — often due to Task cancellation
         try Task.checkCancellation()
-        guard let data else { throw RPCError.noResponse }
+        guard let data = try await rpc.request(cmd, data: payload) else {
+            throw RPCError.noResponse
+        }
         return data
     }
 
-    /// Check if JS replied with { "error": "..." } — happens when handler catches an exception.
+    // MARK: - Helpers
+
     private func checkError(_ data: Data) throws {
-        struct ErrorReply: Decodable { let error: String }
-        if let e = try? JSONDecoder().decode(ErrorReply.self, from: data) {
+        struct E: Decodable { let error: String }
+        if let e = try? JSONDecoder().decode(E.self, from: data) {
             throw RPCError.remoteError(e.error)
         }
     }
 
-    /// Decode fetch wire format: [UInt32 header-len][header JSON][body]
-    /// Checks for error reply first since error JSON won't start with 4 valid length bytes.
     private func decodeFetch(_ data: Data) throws -> FetchResult {
-        // Check for error reply first
         try checkError(data)
-
         guard data.count >= 4 else {
             throw RPCError.malformedResponse("reply too short")
         }
-
         let headerLen = Int(
             data.prefix(4).withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
         )
-
         guard data.count >= 4 + headerLen else {
             throw RPCError.malformedResponse("header truncated")
         }
-
-        let headerData = data[4 ..< 4 + headerLen]
-        let body       = data[(4 + headerLen)...]
-        let meta       = try JSONDecoder().decode(FetchMeta.self, from: headerData)
-        return FetchResult(meta: meta, body: Data(body))
+        let meta = try JSONDecoder().decode(FetchMeta.self, from: data[4 ..< 4 + headerLen])
+        return FetchResult(meta: meta, body: Data(data[(4 + headerLen)...]))
     }
 
     private func encode(_ dict: [String: Any]) throws -> Data {
         try JSONSerialization.data(withJSONObject: dict)
-    }
-}
-
-// MARK: - FetchResult remote error accessor
-
-extension FetchResult {
-    /// Returns the remote error message if JS replied with { "error": "..." }
-    var remoteError: String? {
-        struct E: Decodable { let error: String }
-        return try? JSONDecoder().decode(E.self, from: body).error
     }
 }
