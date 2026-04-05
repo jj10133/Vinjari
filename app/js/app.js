@@ -5,6 +5,7 @@ const Hyperswarm = require('hyperswarm')
 const Hyperdrive = require('hyperdrive')
 const Corestore  = require('corestore')
 const b4a        = require('b4a')
+const{ decode: decodeKey } = require('hypercore-id-encoding')
 
 // Commands — must match RPCClient.swift Command enum
 const CMD_FETCH   = 0
@@ -32,8 +33,12 @@ class HyperBrowser {
   // Each drive opened once. Concurrent requests for the same key
   // await the same `opening` promise — no duplicate open() calls.
 
-  async _drive (hexKey) {
+  async _drive (rawKey) {
     await this.opened
+
+    // Accepts 64-char hex or 52-char z-base-32 — normalise to hex for cache key
+    const keyBuf = decodeKey(rawKey)
+    const hexKey = b4a.toString(keyBuf, 'hex')
 
     if (this.drives.has(hexKey)) {
       const { drive, opening } = this.drives.get(hexKey)
@@ -41,7 +46,7 @@ class HyperBrowser {
       return drive
     }
 
-    const drive   = new Hyperdrive(this.store, b4a.from(hexKey, 'hex'))
+    const drive   = new Hyperdrive(this.store, keyBuf)
     const opening = drive.ready().then(() => {
       this.swarm.join(drive.discoveryKey)
       return this.swarm.flush()
