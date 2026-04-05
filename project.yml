@@ -31,6 +31,8 @@ targets:
     sources:
       - path: app/App.swift
       - path: app/AppDelegate.swift
+      - path: app/Vinjari.icon
+
       - path: app/app.bundle
         optional: true
 
@@ -49,7 +51,7 @@ targets:
 
       - path: app/Core/Root/ContentView.swift
         group: app/Core/Root
-        optional: true
+
     scheme:
       preActions:
         - name: Link & pack
