@@ -13,15 +13,42 @@ packages:
 targets:
   App:
     type: application
-    platform: macOS
+    supportedDestinations: [macOS]
     deploymentTarget: 26.0
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: to.holepunch.bare.ios
+        PRODUCT_NAME: Vinjari
+        PRODUCT_BUNDLE_IDENTIFIER: to.foss.vinjari
         SWIFT_VERSION: 5.0
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+        ARCHS: arm64
+        VALID_ARCHS: arm64
+        EXCLUDED_ARCHS: x86_64
+        ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "-"
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGNING_REQUIRED: NO
+          CODE_SIGNING_ALLOWED: NO
+          VALIDATE_PRODUCT: NO
+          VALIDATE_WORKSPACE: NO
+          OTHER_CODE_SIGN_FLAGS: "--deep --no-strict"
+        Release:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+          CODE_SIGNING_REQUIRED: YES
+          VALIDATE_PRODUCT: YES
+
     info:
       path: app/Info.plist
+    entitlements:
+      path: app/App.entitlements
+      properties:
+        com.apple.security.cs.allow-jit: true
 
     dependencies:
       - framework: app/frameworks/BareKit.xcframework
