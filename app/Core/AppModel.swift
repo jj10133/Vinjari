@@ -28,7 +28,6 @@ final class AppModel {
             let rpc = RPCClient(ipc: ipc)
             self.drives = DriveService(rpc: rpc)
             self.isBooted = true
-            print("[AppModel] ✅ Engine booted successfully")
         }
     }
 }
