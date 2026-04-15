@@ -11,9 +11,9 @@ struct App: SwiftUI.App {
     var body: some Scene {
         WindowGroup(id: "browser") {
             Group {
-                if let drives = appModel.drives {
+                if let browser = appModel.browser {
                     // All windows/tabs use the same engine instance
-                    ContentView(browser: BrowserViewModel(drives: drives))
+                    ContentView(browser: browser)
                 } else {
                     ProgressView("Starting Hyper Runtime...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

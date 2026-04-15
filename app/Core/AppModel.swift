@@ -16,6 +16,7 @@ final class AppModel {
     
     private(set) var runtime = BareRuntime()
     private(set) var drives: DriveService?
+    var browser: BrowserViewModel?
     private(set) var isBooted = false
 
     func boot() async {
@@ -26,7 +27,9 @@ final class AppModel {
         
         if let ipc = runtime.ipc {
             let rpc = RPCClient(ipc: ipc)
-            self.drives = DriveService(rpc: rpc)
+            let driveService = DriveService(rpc: rpc)
+            self.drives = driveService
+            self.browser = BrowserViewModel(drives: driveService)
             self.isBooted = true
         }
     }
