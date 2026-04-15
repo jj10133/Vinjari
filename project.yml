@@ -1,4 +1,4 @@
-name: App
+name: Vinjari
 include:
   - app/addons/addons.yml
 
@@ -65,6 +65,19 @@ targets:
 
       - path: app/js/app.js
         group: app/js
+      - path: app/js/browser.js
+      - path: app/js/session.js
+
+      - path: app/js/commands/fetch.js
+        group: app/js/commands
+      - path: app/js/commands/info.js
+      - path: app/js/commands/readdir.js
+      - path: app/js/commands/write.js
+
+      - path: app/js/utils/encode.js
+        group: app/js/utils
+      - path: app/js/utils/mime.js
+      - path: app/js/utils/paths.js
 
       - path: app/Core/HyperSchemeHandler.swift
         group: app/Core
