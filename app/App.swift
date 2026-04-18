@@ -1,40 +1,27 @@
 import SwiftUI
-
+import AppKit
 
 @main
-struct App: SwiftUI.App {
+struct VinjariApp: SwiftUI.App {
+
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.scenePhase) private var scenePhase
+    @State private var appModel = AppModel.shared
 
-    private var appModel = AppModel.shared
-    
     var body: some Scene {
         WindowGroup(id: "browser") {
-            Group {
-                if let browser = appModel.browser {
-                    // All windows/tabs use the same engine instance
-                    ContentView(browser: browser)
-                } else {
-                    ProgressView("Starting Hyper Runtime...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .task { await appModel.boot() }
-            .background(WindowConfigurator())
-            .onDisappear {
-                appModel.runtime.terminate()
+            // Each window scene gets its own stable id
+            WindowView(appModel: appModel)
+                .background(WindowConfigurator())
+        }
+//        .windowRestorationBehavior(.disabled)
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background: appModel.runtime.suspend()
+            case .active:     appModel.runtime.resume()
+            default:          break
             }
         }
-        .onChange(of: scenePhase, { oldValue, newValue in
-            switch newValue {
-            case .background:
-                appModel.runtime.suspend()
-            case .active:
-                appModel.runtime.resume()
-            default:
-                break
-            }
-        })
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Tab") {
@@ -46,15 +33,43 @@ struct App: SwiftUI.App {
     }
 }
 
+// Separate view so each window scene has its own @State windowId
+// and its own stable BrowserViewModel reference.
+private struct WindowView: View {
+    let appModel: AppModel
+
+    // UUID generated once per window instantiation — stable across re-renders
+    @State private var windowId = UUID().uuidString
+    @State private var browser  : BrowserViewModel? = nil
+
+    var body: some View {
+        Group {
+            if let browser {
+                ContentView(browser: browser)
+            } else {
+                ProgressView("Starting Hyper…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task {
+            await appModel.boot()
+            // Assign after boot so drives exists
+            if browser == nil {
+                browser = appModel.browser(for: windowId)
+            }
+        }
+        .onDisappear {
+            // Window closed — release the BrowserViewModel
+            appModel.closeBrowser(for: windowId)
+        }
+    }
+}
+
 struct WindowConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            if let window = view.window {
-                window.tabbingMode = .preferred
-                // This ensures the window is treated as a tab if others exist
-                window.isRestorable = true
-            }
+            view.window?.tabbingMode = .preferred
         }
         return view
     }

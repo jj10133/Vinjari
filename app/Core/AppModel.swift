@@ -1,11 +1,3 @@
-//
-//  AppModel.swift
-//  App
-//
-//  Created by Janardhan on 2026-04-03.
-//
-
-
 import SwiftUI
 import Observation
 
@@ -13,24 +5,34 @@ import Observation
 @Observable
 final class AppModel {
     static let shared = AppModel()
-    
-    private(set) var runtime = BareRuntime()
-    private(set) var drives: DriveService?
-    var browser: BrowserViewModel?
-    private(set) var isBooted = false
+
+    private(set) var runtime  = BareRuntime()
+    private(set) var drives   : DriveService?
+    private(set) var isBooted : Bool = false
+
+    // One BrowserViewModel per window — keyed by window scene id.
+    // WebPage/WKWebView cannot be in two view hierarchies simultaneously.
+    private var browsers: [String: BrowserViewModel] = [:]
 
     func boot() async {
         guard !isBooted else { return }
-        
-        // Start the single background engine
         runtime.start()
-        
-        if let ipc = runtime.ipc {
-            let rpc = RPCClient(ipc: ipc)
-            let driveService = DriveService(rpc: rpc)
-            self.drives = driveService
-            self.browser = BrowserViewModel(drives: driveService)
-            self.isBooted = true
-        }
+        guard let ipc = runtime.ipc else { return }
+        let rpc = RPCClient(ipc: ipc)
+        drives      = DriveService(rpc: rpc)
+        isBooted    = true
+    }
+
+    // Called from each WindowGroup scene — returns existing or creates new.
+    func browser(for windowId: String) -> BrowserViewModel? {
+        guard let drives else { return nil }
+        if let existing = browsers[windowId] { return existing }
+        let vm = BrowserViewModel(drives: drives)
+        browsers[windowId] = vm
+        return vm
+    }
+
+    func closeBrowser(for windowId: String) {
+        browsers.removeValue(forKey: windowId)
     }
 }
