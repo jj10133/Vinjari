@@ -64,6 +64,7 @@ module.exports = async function fetch (req, getSession) {
         'Content-Length': String(end - start + 1),
         'Accept-Ranges' : 'bytes',
         'Cache-Control' : 'no-store',
+        'Access-Control-Allow-Origin' : "*"
       }
     }
 
