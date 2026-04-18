@@ -1,11 +1,3 @@
-//
-//  fetch.js
-//  App
-//
-//  Created by joker on 2026-04-05.
-//
-
-
 'use strict'
 
 const { errorBuf, encodeReply, parseRange } = require('../utils/encode')
@@ -31,12 +23,13 @@ module.exports = async function fetch (req, getSession) {
     const { drive } = session
     const candidates = resolvePaths(rawPath)
 
-    // Find entry — { wait: true } on remote drives so we wait only
-    // for this specific block, not the whole drive
     let entry    = null
     let filePath = candidates[0]
 
     for (const candidate of candidates) {
+      // drive.entry() queries the trie locally — fast but may miss
+      // trie nodes not yet replicated on first visit.
+      // drive.get() forces full trie path resolution from peers if needed.
       const e = drive.writable
         ? await drive.entry(candidate)
         : await drive.entry(candidate, { wait: true })
@@ -60,11 +53,11 @@ module.exports = async function fetch (req, getSession) {
     const meta = {
       statusCode: range ? 206 : 200,
       headers: {
-        'Content-Type'  : mime(filePath),
-        'Content-Length': String(end - start + 1),
-        'Accept-Ranges' : 'bytes',
-        'Cache-Control' : 'no-store',
-        'Access-Control-Allow-Origin' : "*"
+        'Content-Type'               : mime(filePath),
+        'Content-Length'             : String(end - start + 1),
+        'Accept-Ranges'              : 'bytes',
+        'Cache-Control'              : 'no-store',
+        'Access-Control-Allow-Origin': '*',
       }
     }
 

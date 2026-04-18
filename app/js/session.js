@@ -1,46 +1,42 @@
-//
-//  DriveSession.swift
-//  App
-//
-//  Created by joker on 2026-04-05.
-//
-
-
 'use strict'
 
 const EventEmitter = require('bare-events')
 
-// DriveSession — one per drive key.
-// Opens immediately, replicates in background.
-// Emits: 'ready', 'peer', 'update'
+const OPEN_TIMEOUT_MS = 30000
 
 class DriveSession extends EventEmitter {
   constructor (drive, swarm) {
     super()
-    this.drive = drive
-    this.swarm = swarm
-    this.peers = 0
-    this.ready = false
-    this._setup()
+    this.drive   = drive
+    this.swarm   = swarm
+    this.peers   = 0
+    this.ready   = false
+    this._readyP = this._open()
   }
 
-  _setup () {
-    this.drive.ready().then(() => {
-      this.ready = true
-      this.emit('ready')
+  async _open () {
+    await this.drive.ready()
 
-      // Join swarm in background — never blocks fetch
+    if (this.drive.writable) {
       this.swarm.join(this.drive.discoveryKey)
+      this.ready = true
+      return
+    }
 
-      // Watch for new content from drive owner
-      if (!this.drive.writable) {
-        this.drive.core.on('append', () => {
-          this.emit('update', { version: this.drive.version })
-        })
-      }
-    })
+    // Join and wait for swarm to fully flush — ensures replication
+    // handshake completes before we attempt any block requests
+    const joined = this.swarm.join(this.drive.discoveryKey)
+    await joined.flushed()
+    console.log('[session] swarm flushed, connections:', this.swarm.connections.size)
 
-    // Peer count tracking
+    // Pull trie root from peers
+    await this.drive.update()
+    console.log('[session] drive updated, version:', this.drive.version)
+
+    this.peers = this.swarm.connections.size
+    this.ready = true
+
+    // Continue tracking peers
     this.swarm.on('connection', () => {
       this.peers = this.swarm.connections.size
       this.emit('peer', { peers: this.peers })
@@ -50,14 +46,22 @@ class DriveSession extends EventEmitter {
       this.peers = this.swarm.connections.size
       this.emit('peer', { peers: this.peers })
     })
+
+    this.drive.core.on('append', () => {
+      this.emit('update', { version: this.drive.version })
+    })
   }
 
-  // Wait for drive to be locally ready — fast, no network required
-  waitReady (timeout = 5000) {
+  waitReady (timeout = OPEN_TIMEOUT_MS) {
     if (this.ready) return Promise.resolve()
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('drive open timeout')), timeout)
-      this.once('ready', () => { clearTimeout(t); resolve() })
+      const t = setTimeout(
+        () => reject(new Error('drive open timeout after ' + timeout + 'ms')),
+        timeout
+      )
+      this._readyP
+        .then(() => { clearTimeout(t); resolve() })
+        .catch((err) => { clearTimeout(t); reject(err) })
     })
   }
 }
