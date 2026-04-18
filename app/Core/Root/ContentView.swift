@@ -60,7 +60,7 @@ struct ContentView: View {
                         if !isLoading { tab.navigationCounter += 1 }
                     }
             }
-            .id(tab.id)
+            .id(browser.activeTab?.id)
             .navigationTitle(tab.page.title.isEmpty ? "New Tab" : tab.page.title)
         } else {
             // A non-empty view prevents the "buildExpression" error
