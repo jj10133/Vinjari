@@ -17,7 +17,7 @@ final class BrowserTab: Identifiable {
 
         var config = WebPage.Configuration()
         config.urlSchemeHandlers[scheme] = handler
-        config.websiteDataStore = .default()
+        config.websiteDataStore = .nonPersistent()
 
         self.page = WebPage(configuration: config, navigationDecider: decider)
     }
