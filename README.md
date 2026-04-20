@@ -53,8 +53,8 @@ Then open Vinjari and navigate to `hyper://<z32-key>/`.
 
 ### Prerequisites
 
-- macOS 15+
-- Xcode 16+
+- macOS 26+
+- Xcode 26+
 - Node.js 18+
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
 - [GitHub CLI](https://cli.github.com): `brew install gh`
@@ -64,8 +64,8 @@ Then open Vinjari and navigate to `hyper://<z32-key>/`.
 **1. Clone and install JS dependencies**
 
 ```sh
-git clone https://github.com/your-org/peerdrop
-cd peerdrop
+git clone https://github.com/your-org/Vinjari
+cd Vinjari
 npm install
 ```
 
