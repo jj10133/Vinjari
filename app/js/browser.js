@@ -22,6 +22,7 @@ const cmdFetch     = require('./commands/fetch')
 const cmdReaddir   = require('./commands/readdir')
 const cmdWrite     = require('./commands/write')
 const cmdInfo      = require('./commands/info')
+const cmdOpen      = require('./commands/open')
 
 // ─── Command IDs — must match RPCClient.swift ─────────────────────────────────
 
@@ -29,6 +30,7 @@ const CMD_FETCH   = 0
 const CMD_READDIR = 1
 const CMD_WRITE   = 2
 const CMD_INFO    = 3
+const CMD_OPEN    = 4
 
 // ─── HyperBrowser ─────────────────────────────────────────────────────────────
 
@@ -110,6 +112,7 @@ class HyperBrowser extends EventEmitter {
       case CMD_READDIR: cmdReaddir(req, get);              break
       case CMD_WRITE:   cmdWrite(req, get);                break
       case CMD_INFO:    cmdInfo(req, get, this.cache);     break
+      case CMD_OPEN:    cmdOpen(req, get);                break
       default:
         req.reply(Buffer.from(JSON.stringify({ error: 'unknown command: ' + req.command })))
     }

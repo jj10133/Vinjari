@@ -1,10 +1,8 @@
 // DriveService.swift
-// Domain-level drive operations. Protocol allows mocking in tests.
-// All methods are async throws — callers use await.
-
 import Foundation
 
 protocol DriveServiceProtocol {
+    func open(key: String) async throws
     func fetch(key: String, path: String, headers: [String: String]) async throws -> FetchResult
     func readdir(key: String, path: String) async throws -> [DriveEntry]
     func write(key: String, path: String, data: Data) async throws
@@ -16,6 +14,10 @@ final class DriveService: DriveServiceProtocol {
     private let rpc: RPCClient
 
     init(rpc: RPCClient) { self.rpc = rpc }
+
+    func open(key: String) async throws {
+        try await rpc.open(key: key)
+    }
 
     func fetch(key: String, path: String, headers: [String: String] = [:]) async throws -> FetchResult {
         try await rpc.fetch(key: key, path: path, headers: headers)

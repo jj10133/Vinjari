@@ -35,6 +35,7 @@ enum Command {
     static let readdir: UInt = 1
     static let write  : UInt = 2
     static let info   : UInt = 3
+    static let open   : UInt = 4
 }
 
 // MARK: - Domain types
@@ -193,6 +194,12 @@ final class RPCClient: @unchecked Sendable {
     func write(key: String, path: String, data fileData: Data) async throws {
         let payload = try encode(["key": key, "path": path, "data": fileData.base64EncodedString()])
         try checkError(try await enqueue(Command.write, payload: payload))
+    }
+
+    func open(key: String) async throws {
+        let payload = try encode(["key": key])
+        let reply   = try await enqueue(Command.open, payload: payload)
+        try checkError(reply)
     }
 
     func driveInfo(key: String) async throws -> DriveInfo {

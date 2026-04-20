@@ -39,6 +39,11 @@ struct HyperSchemeHandler: URLSchemeHandler {
                         }
                     }
 
+                    // Pre-open drive outside the fetch queue.
+                    // waitReady() (swarm flush + drive.update) can take seconds on first visit.
+                    // Doing it here means the fetch queue isn't blocked during peer discovery.
+                    try await drives.open(key: key)
+
                     try Task.checkCancellation()
                     print("[scheme] calling drives.fetch for \(path)")
 
