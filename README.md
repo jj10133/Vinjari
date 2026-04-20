@@ -28,39 +28,6 @@ hyper://odf3uawx1369n1pcapby5dwhjr1h9p45r84hgpp3f3ua6crdetby/
 | Storage | [Hyperdrive](https://github.com/holepunchto/hyperdrive) — p2p filesystem |
 | Rendering | WebKit — `hyper://` served via `URLSchemeHandler` |
 
-## Concurrency note
-
-WebKit fires concurrent requests for page assets (HTML, CSS, JS, fonts). [bare-rpc-swift](https://github.com/holepunchto/bare-rpc-swift) is intentionally single-threaded — thread safety lives in the wrapper, not the library.
-
-Vinjari serialises all RPC access through `@MainActor`:
-
-```swift
-// All rpc.request() and rpc.receive() calls run on the main actor —
-// one at a time, no concurrent mutation of bare-rpc's internal state.
-
-@MainActor
-final class RPCClient { ... }
-
-@MainActor
-private final class IPCBridge: RPCDelegate {
-    // BareIPC.write() is also not concurrent-safe.
-    // Fire-and-forget into @MainActor Task serialises writes.
-    nonisolated func rpc(_ rpc: RPC, send data: Data) {
-        Task { @MainActor in try? await ipc.write(data: data) }
-    }
-
-    func readLoop() async {
-        for try await chunk in ipc {
-            // Hop to MainActor before receive() so it never races
-            // with a concurrent request() call
-            await MainActor.run { rpc?.receive(chunk) }
-        }
-    }
-}
-```
-
-If you are building something similar with bare-rpc-swift and WebKit, this is the pattern to follow.
-
 ## Publishing a site
 
 Any static site works. Build it, mirror it to a Hyperdrive, seed it:
