@@ -49,20 +49,51 @@ drives seed <z32-key>
 
 Then open Vinjari and navigate to `hyper://<z32-key>/`.
 
-## Requirements
+## Getting your environment set up
 
-- macOS 26+
-- Xcode 26+
+### Prerequisites
 
-## Building
+- macOS 15+
+- Xcode 16+
+- Node.js 18+
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
+- [GitHub CLI](https://cli.github.com): `brew install gh`
 
-```bash
-git clone https://github.com/yourname/vinjari
-cd vinjari
+### Steps
+
+**1. Clone and install JS dependencies**
+
+```sh
+git clone https://github.com/your-org/peerdrop
+cd peerdrop
 npm install
-xcodegen generate
-open Vinjari.xcodeproj
 ```
+
+**2. Download BareKit**
+
+BareKit is the Swift package that embeds the Bare JS runtime inside a macOS app. You need its prebuilt framework.
+
+```sh
+gh release download --repo holepunchto/bare-kit <version>
+```
+
+Unpack `prebuilds.zip` and move `macos/BareKit.xcframework` into `app/frameworks/`:
+
+```
+app/
+  frameworks/
+    BareKit.xcframework/   ← here
+```
+
+**3. Generate the Xcode project**
+
+```sh
+xcodegen generate
+```
+
+Re-run this any time you edit `project.yml`.
+
+
 
 ## License
 
