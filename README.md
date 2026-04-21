@@ -7,7 +7,7 @@ A p2p browser for macOS built on the [Holepunch](https://holepunch.to) stack. Br
 Every site is a Hyperdrive — a p2p filesystem identified by a public key. When you navigate to a `hyper://` address, Vinjari connects to peers in the Hyperswarm DHT who are seeding that drive and streams the content directly to WebKit. The experience is identical to browsing a normal website.
 
 ```
-hyper://odf3uawx1369n1pcapby5dwhjr1h9p45r84hgpp3f3ua6crdetby/
+hyper://73kf7pzbtcy9f4jtxssy941adse9jheddqx3f931o9d65k13g99y/
 ```
 
 ## Features
